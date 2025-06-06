@@ -2,7 +2,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { offerScripturalGuidance, OfferScripturalGuidanceInputSchema, type OfferScripturalGuidanceOutput } from '@/ai/flows/offer-scriptural-guidance';
 import { ZodError } from 'zod';
-import { authAdmin } from '@/lib/firebase/admin'; // Import authAdmin
+import { authAdmin, firestoreAdmin } from '@/lib/firebase/admin'; // Updated import
 
 export async function POST(request: NextRequest) {
   const authorization = request.headers.get('Authorization');
@@ -11,11 +11,11 @@ export async function POST(request: NextRequest) {
   }
   const idToken = authorization.split('Bearer ')[1];
 
-  let userId: string; // Or decodedToken if more info is needed later
+  let userId: string;
   try {
     const decodedToken = await authAdmin.verifyIdToken(idToken);
     userId = decodedToken.uid;
-    // TODO: Add custom claim checks here if needed, e.g.
+    // TODO: Add custom claim checks here if needed for role-based access, e.g.
     // if (!decodedToken.canSeekGuidance) {
     //   return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     // }
@@ -27,11 +27,23 @@ export async function POST(request: NextRequest) {
   try {
     const requestBody = await request.json();
     const validatedInput = OfferScripturalGuidanceInputSchema.parse(requestBody);
-
-    // TODO: Consider persisting input, output, and userId to Firestore here if needed.
-    // e.g., await firestoreAdmin.collection('guidanceLogs').add({ userId, input: validatedInput, ... });
     
     const result: OfferScripturalGuidanceOutput = await offerScripturalGuidance(validatedInput);
+
+    // Persist to Firestore
+    try {
+      await firestoreAdmin.collection('guidanceLogs').add({
+        userId: userId,
+        inputDecision: validatedInput.decision,
+        inputClanTraditions: validatedInput.clanTraditions,
+        outputScripturalReference: result.scripturalReference,
+        outputExplanation: result.explanation,
+        createdAt: firestoreAdmin.FieldValue.serverTimestamp(),
+      });
+    } catch (dbError) {
+      console.error('Error saving guidance log to Firestore:', dbError);
+      // Log error but proceed to return AI result
+    }
     
     return NextResponse.json(result, { status: 200 });
   } catch (error) {

@@ -2,7 +2,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { suggestResolutionPaths, SuggestResolutionPathsInputSchema, type SuggestResolutionPathsOutput } from '@/ai/flows/suggest-resolution-paths';
 import { ZodError } from 'zod';
-import { authAdmin } from '@/lib/firebase/admin'; // Import authAdmin
+import { authAdmin, firestoreAdmin } from '@/lib/firebase/admin'; // Updated import
 
 export async function POST(request: NextRequest) {
   const authorization = request.headers.get('Authorization');
@@ -11,11 +11,11 @@ export async function POST(request: NextRequest) {
   }
   const idToken = authorization.split('Bearer ')[1];
 
-  let userId: string; // Or decodedToken if more info is needed later
+  let userId: string;
   try {
     const decodedToken = await authAdmin.verifyIdToken(idToken);
     userId = decodedToken.uid;
-    // TODO: Add custom claim checks here if needed, e.g.
+    // TODO: Add custom claim checks here if needed for role-based access, e.g.
     // if (!decodedToken.canMediateDisputes) {
     //   return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     // }
@@ -28,10 +28,22 @@ export async function POST(request: NextRequest) {
     const requestBody = await request.json();
     const validatedInput = SuggestResolutionPathsInputSchema.parse(requestBody);
     
-    // TODO: Consider persisting input, output, and userId to Firestore here if needed.
-    // e.g., await firestoreAdmin.collection('disputeRecords').add({ userId, input: validatedInput, ... });
-
     const result: SuggestResolutionPathsOutput = await suggestResolutionPaths(validatedInput);
+
+    // Persist to Firestore
+    try {
+      await firestoreAdmin.collection('disputeRecords').add({
+        userId: userId,
+        inputTestimonies: validatedInput.testimonies,
+        inputDisputeType: validatedInput.disputeType,
+        inputEthicsRules: validatedInput.ethicsRules, // Storing as string, could be parsed if needed
+        outputResolutionPaths: result.resolutionPaths,
+        createdAt: firestoreAdmin.FieldValue.serverTimestamp(),
+      });
+    } catch (dbError) {
+      console.error('Error saving dispute record to Firestore:', dbError);
+      // Log error but proceed to return AI result
+    }
     
     return NextResponse.json(result, { status: 200 });
   } catch (error) {

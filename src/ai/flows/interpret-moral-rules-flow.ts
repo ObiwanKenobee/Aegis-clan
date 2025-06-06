@@ -15,7 +15,8 @@ export const InterpretMoralRulesInputSchema = z.object({
   situationDescription: z.string().min(10, 'Situation description must be at least 10 characters.').describe('A detailed description of the situation or action to be evaluated.'),
   moralRulesJson: z.string().describe('The clan\'s moral rules in JSON format (based on ethics_rules.schema.json).').refine((val) => {
     try {
-      JSON.parse(val);
+      JSON.parse(val); // Check if it's valid JSON
+      // Optionally, add more validation against a Zod schema for ethics_rules.schema.json if needed
       return true;
     } catch (e) {
       return false;
@@ -68,13 +69,13 @@ Additional Clan Context:
 Your tasks are:
 1.  Carefully analyze the situation description in relation to EACH rule defined in the moral rules JSON.
 2.  Identify any conflicts, violations, or areas where the situation does not align with the stated rules and their conditions.
-3.  For each conflict, specify the 'rule_id_implicated', a 'conflict_description', the 'relevant_condition' from the rule if applicable, and a 'suggested_action_or_review'.
+3.  For each conflict, accurately populate all fields of the ConflictDetailSchema: 'rule_id_implicated', 'conflict_description', 'relevant_condition' (if applicable), and 'suggested_action_or_review'.
 4.  Provide an 'overallAssessment' of the situation (e.g., "Compliant", "Minor Conflict requiring clarification", "Significant Conflict requiring elder review").
 5.  Formulate a concise 'recommendation' for the clan elders or involved parties.
 6.  If specific scriptural references are cited in the rules that become relevant to identified conflicts, list them under 'pertinentScripturalReferences'.
 
-Ensure your output strictly adheres to the requested JSON schema.
-If no conflicts are found, the 'conflicts' array should be empty, and the assessment should reflect compliance.
+Ensure your output strictly adheres to the requested JSON schema for InterpretMoralRulesOutput.
+If no conflicts are found, the 'conflicts' array MUST be an empty array [], and the assessment should reflect compliance.
 `,
 });
 
@@ -89,6 +90,10 @@ const interpretMoralRulesFlow = ai.defineFlow(
     if (!output) {
       throw new Error("CovenantAgent failed to produce an interpretation.");
     }
-    return output;
+    // Ensure the output conforms, especially the conflicts array.
+    return {
+        ...output,
+        conflicts: output.conflicts || [], // Ensure conflicts is an array, even if empty
+    };
   }
 );

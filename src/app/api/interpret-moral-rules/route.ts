@@ -17,9 +17,9 @@ export async function POST(request: NextRequest) {
   try {
     decodedToken = await authAdmin.verifyIdToken(idToken);
     userId = decodedToken.uid;
-    // TODO: Add custom claim checks here if needed, e.g.,
-    // if (!decodedToken.canRequestInterpretation) { // Example custom claim
-    //   return NextResponse.json({ error: 'Forbidden: Insufficient permissions to request moral rule interpretation.' }, { status: 403 });
+    // Example custom claim check
+    // if (!decodedToken.canRequestInterpretation) { 
+    //   return NextResponse.json({ error: 'Forbidden: Insufficient permissions.' }, { status: 403 });
     // }
   } catch (error) {
     console.error('Error verifying ID token:', error);
@@ -35,24 +35,29 @@ export async function POST(request: NextRequest) {
     // Persist to Firestore 'agent_logs' collection
     try {
       const logEntryRef = firestoreAdmin.collection('agent_logs').doc();
+      // Simple hash for moral rules for logging, or consider storing a version/ID if rules are versioned
+      const moralRulesHash = validatedInput.moralRulesJson.length + validatedInput.moralRulesJson.substring(0,20);
+
       await logEntryRef.set({
         log_id: logEntryRef.id,
         agent: "CovenantAgent",
-        trigger_event: "moralRuleInterpretation",
+        trigger_event: "moralRuleInterpretationRequested",
         timestamp: firestoreAdmin.FieldValue.serverTimestamp(),
-        decision: result.overallAssessment, // Or a summary of the recommendation
+        decision: result.overallAssessment, 
         context: {
           requested_by_uid: userId,
-          clan_id: decodedToken.clanId || null, // Assuming clanId might be a custom claim
+          clan_id: decodedToken.clanId || null, 
           situationDescription: validatedInput.situationDescription,
-          moralRulesUsedHash: validatedInput.moralRulesJson.length, // Could hash the rules JSON for brevity if needed
-          // Consider storing the full rules if small enough, or a reference if large/versioned
+          moralRulesHash: moralRulesHash,
+          clanContext: validatedInput.clanContext,
         },
-        result: result, // Store the full agent output
-        // ethics_reference could be populated from result.pertinentScripturalReferences if needed
+        result: result, // Store the full agent output, which matches InterpretMoralRulesOutputSchema
+        ethics_reference: result.pertinentScripturalReferences && result.pertinentScripturalReferences.length > 0 
+                          ? result.pertinentScripturalReferences.join(', ') 
+                          : null,
       });
     } catch (dbError) {
-      console.error('Error saving to Firestore agent_logs:', dbError);
+      console.error('Error saving moral interpretation log to Firestore agent_logs:', dbError);
       // Log error but proceed to return AI result
     }
     
@@ -62,6 +67,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid input for moral rule interpretation', details: error.errors }, { status: 400 });
     }
     console.error('Error in interpretMoralRules API:', error);
+     if (error instanceof Error) {
+        return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
+    }
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

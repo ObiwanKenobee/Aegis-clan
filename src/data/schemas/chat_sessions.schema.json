@@ -1,0 +1,27 @@
+
+{
+  "sessionId": "chat_session_001",
+  "clanId": "kisii_nyangena_clan",
+  "participants": ["uid_001", "uid_002", "ChatHistoryAnalyzerAgent"],
+  "startTime": "2025-07-01T10:00:00Z",
+  "endTime": "2025-07-01T10:30:00Z",
+  "title": "Discussion about upcoming harvest festival",
+  "messages": [
+    {
+      "messageId": "msg_001",
+      "sender": "uid_001",
+      "timestamp": "2025-07-01T10:00:15Z",
+      "text": "Good morning, everyone. Let's discuss the plans for the harvest festival."
+    },
+    {
+      "messageId": "msg_002",
+      "sender": "uid_002",
+      "timestamp": "2025-07-01T10:00:45Z",
+      "text": "I agree. I was thinking we should invite the neighboring clan this year."
+    }
+  ],
+  "summary": "Initial discussion on harvest festival planning, including an idea to invite a neighboring clan.",
+  "tags": ["planning", "harvest_festival", "community_relations"],
+  "lastAnalyzedBy": "ChatHistoryAnalyzerAgent",
+  "lastAnalysisTimestamp": "2025-07-01T10:31:00Z"
+}

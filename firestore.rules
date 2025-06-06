@@ -1,0 +1,139 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function to get user's ID
+    function getUid() {
+      return request.auth.uid;
+    }
+
+    // Helper function to check for a specific role (custom claim)
+    // Example: request.auth.token.role == 'elder'
+    // Ensure your custom claims are set appropriately on Firebase Auth users
+    function hasRole(roleName) {
+      return request.auth.token[roleName] == true || request.auth.token.role == roleName;
+    }
+
+    // Helper function to check if user is member of a specific clan (assuming clanId is a custom claim)
+    function isMemberOfClan(clanId) {
+      return request.auth.token.clanId == clanId;
+    }
+    
+    // Helper function to check if user is an elder of a specific clan (assuming roles like 'elder_clanId' or a map)
+    function isElderOfClan(clanId) {
+      // This is an example. Your custom claims structure might differ.
+      // Option 1: Direct claim like "isElderOf_kisii_nyangena_clan": true
+      // return request.auth.token['isElderOf_' + clanId] == true;
+      // Option 2: A map claim "roles": { "kisii_nyangena_clan": "elder" }
+      return request.auth.token.roles[clanId] == 'elder';
+    }
+
+    // Family Trees: Users can manage their own family trees. Elders of a clan can view all trees in their clan.
+    match /familyTrees/{treeId} {
+      allow read: if isAuthenticated() && (resource.data.userId == getUid() || (resource.data.clanId != null && isElderOfClan(resource.data.clanId)));
+      allow create: if isAuthenticated() && request.resource.data.userId == getUid();
+      // Update/delete might be restricted to the owner or elders with specific permissions
+      allow update, delete: if isAuthenticated() && resource.data.userId == getUid();
+      // Ensure new data conforms: userId must be creator, clanId if present must be valid
+      allow create: if isAuthenticated() && request.resource.data.userId == getUid()
+                      && (request.resource.data.clanId == null || request.resource.data.clanId == request.auth.token.clanId);
+    }
+
+    // Guidance Logs: Users can read guidance they requested. Elders might see all for their clan.
+    match /guidanceLogs/{logId} {
+      allow read: if isAuthenticated() && (resource.data.userId == getUid() || (resource.data.clanId != null && isElderOfClan(resource.data.clanId)));
+      allow create: if isAuthenticated() && request.resource.data.userId == getUid();
+      // Guidance logs are typically immutable once created
+      allow update, delete: if false;
+    }
+
+    // Disputes: Involved parties and elders of the clan can read. Submitter can create.
+    // Resolution and status updates might be restricted to elders or specific agents.
+    match /disputes/{disputeId} {
+      allow read: if isAuthenticated() && 
+                    (resource.data.submittedBy == getUid() || 
+                     getUid() in resource.data.involvedParties || 
+                     isElderOfClan(resource.data.clanId));
+      allow create: if isAuthenticated() && request.resource.data.submittedBy == getUid() 
+                      && request.resource.data.clanId == request.auth.token.clanId; // User must belong to the clan of dispute
+      allow update: if isAuthenticated() && isElderOfClan(resource.data.clanId); // Only elders can update (e.g., status, agent_simulations)
+      allow delete: if isAuthenticated() && isElderOfClan(resource.data.clanId); // Or perhaps only if status is 'archived'
+    }
+
+    // Rites: Members can read rites they are part of or that belong to their clan (if public).
+    // Elders can manage all rites in their clan.
+    match /rites/{riteId} {
+      allow read: if isAuthenticated() && 
+                    (resource.data.memberId == request.auth.token.memberId || // Assuming memberId is a custom claim
+                     resource.data.userId == getUid() || // If logged by user
+                     isElderOfClan(resource.data.clanId) ||
+                     isMemberOfClan(resource.data.clanId) ); // Basic clan member read access
+      allow create: if isAuthenticated() && request.resource.data.userId == getUid()
+                      && request.resource.data.clanId == request.auth.token.clanId;
+      allow update: if isAuthenticated() && (resource.data.userId == getUid() || isElderOfClan(resource.data.clanId));
+      allow delete: if isAuthenticated() && (resource.data.userId == getUid() || isElderOfClan(resource.data.clanId));
+    }
+
+    // Clans: Generally, clan metadata might be more publicly readable by members of that clan.
+    // Creation/Update restricted to super-admins or specific processes.
+    match /clans/{clanId} {
+      allow read: if isAuthenticated() && isMemberOfClan(clanId);
+      // Creation and updates to clan documents should be highly restricted,
+      // typically done via a trusted backend/admin process, not direct client writes.
+      allow create, update, delete: if false; // Example: Disable direct client modification
+    }
+
+    // Members: Users can read their own member data. Elders can read member data of their clan.
+    // Creation might be admin-only or through a specific registration flow.
+    match /members/{memberUid} {
+      allow read: if isAuthenticated() && (getUid() == memberUid || isElderOfClan(request.auth.token.clanId));
+      // Updates to sensitive fields should be controlled. Users might update some of their own profile.
+      allow update: if isAuthenticated() && getUid() == memberUid; // User can update their own data
+      // Creation/deletion often admin tasks.
+      allow create, delete: if false; // Example: Disable direct client modification
+    }
+
+    // Vaults: Access typically restricted to elders or designated vault keepers of the clan.
+    // Transactions might be append-only by authorized users/agents.
+    match /vaults/{vaultId} {
+      allow read: if isAuthenticated() && isElderOfClan(resource.data.clanId); // Or specific 'vaultKeeper' role
+      // Vault creation and rule updates are admin tasks.
+      allow create, update: if false; // Example: disable client modification of vault structure
+      // Transactions subcollection might have different rules
+      match /transactions/{transactionId} {
+         allow read: if isAuthenticated() && isElderOfClan(getDoc(['vaults', vaultId]).data.clanId);
+         allow create: if isAuthenticated() && hasRole('VaultAgent'); // Example: only VaultAgent can create transactions
+         allow update, delete: if false; // Transactions are immutable
+      }
+    }
+    
+    // Ethics Rules: Possibly readable by all clan members, editable only by elders or specific roles.
+    match /ethics_rules/{ruleId} {
+      allow read: if isAuthenticated() && isMemberOfClan(resource.data.clanId); // Assuming rules are tied to a clan
+      allow create, update, delete: if isAuthenticated() && isElderOfClan(resource.data.clanId);
+    }
+    
+    // Agent Logs & Agent Responses: Generally append-only by agents, readable by elders or relevant users.
+    match /agent_logs/{logId} {
+      allow read: if isAuthenticated() && isElderOfClan(request.auth.token.clanId); // Simplified: elders can read logs
+      allow create: if isAuthenticated() && hasRole('Agent'); // Only services with 'Agent' role claim can write logs
+      allow update, delete: if false;
+    }
+    match /agent_responses/{responseId} {
+      allow read: if isAuthenticated() && isElderOfClan(request.auth.token.clanId); 
+      allow create: if isAuthenticated() && hasRole('Agent');
+      allow update, delete: if false;
+    }
+
+    // Note: For hasRole('Agent'), your backend services/Cloud Functions making these writes
+    // would need to be authenticated with a service account that has this custom claim,
+    // or you'd use Admin SDK which bypasses rules (but then API security is paramount).
+  }
+}

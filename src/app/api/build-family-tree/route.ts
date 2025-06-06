@@ -1,8 +1,9 @@
+
 // src/app/api/build-family-tree/route.ts
 import { NextResponse, type NextRequest } from 'next/server';
 import { buildFamilyTree, BuildFamilyTreeInputSchema, type BuildFamilyTreeOutput } from '@/ai/flows/build-family-tree';
 import { ZodError } from 'zod';
-import { authAdmin, firestoreAdmin } from '@/lib/firebase/admin'; // Updated import
+import { authAdmin, firestoreAdmin } from '@/lib/firebase/admin';
 
 export async function POST(request: NextRequest) {
   const authorization = request.headers.get('Authorization');
@@ -12,16 +13,24 @@ export async function POST(request: NextRequest) {
   const idToken = authorization.split('Bearer ')[1];
 
   let userId: string;
+  let decodedToken; // Make decodedToken available in the broader scope
   try {
-    const decodedToken = await authAdmin.verifyIdToken(idToken);
+    decodedToken = await authAdmin.verifyIdToken(idToken);
     userId = decodedToken.uid;
-    // TODO: Add custom claim checks here if needed for role-based access, e.g.
-    // if (!decodedToken.canManageFamilyTree) {
-    //   return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 });
-    // }
+    
+    // Example of checking for a custom claim
+    // You would set this claim on the user via a trusted backend process (e.g., a Cloud Function)
+    // For example: await authAdmin.setCustomUserClaims(userId, { canManageFamilyTree: true });
+    if (!decodedToken.canManageFamilyTree) { // Check for the custom claim
+      // To make this work, you'd need to set this custom claim on users who should have this permission.
+      // For testing, you might temporarily bypass this or ensure your test user has the claim.
+      // console.warn(`User ${userId} attempted to manage family tree without 'canManageFamilyTree' claim.`);
+      // return NextResponse.json({ error: 'Forbidden: Insufficient permissions to manage family trees.' }, { status: 403 });
+    }
+
   } catch (error) {
-    console.error('Error verifying ID token:', error);
-    return NextResponse.json({ error: 'Unauthorized: Invalid token.' }, { status: 401 });
+    console.error('Error verifying ID token or checking claims:', error);
+    return NextResponse.json({ error: 'Unauthorized: Invalid token or claim issue.' }, { status: 401 });
   }
 
   try {
@@ -33,15 +42,15 @@ export async function POST(request: NextRequest) {
     // Persist to Firestore
     try {
       await firestoreAdmin.collection('familyTrees').add({
-        userId: userId,
+        userId: userId, // User who initiated this
+        clanId: decodedToken.clanId || null, // Example: if clanId is part of custom claims
         familyDataInput: validatedInput.familyData,
         generatedTree: result.familyTree,
-        createdAt: firestoreAdmin.FieldValue.serverTimestamp(), // Ensure firestoreAdmin is used
+        createdAt: firestoreAdmin.FieldValue.serverTimestamp(),
       });
     } catch (dbError) {
       console.error('Error saving to Firestore:', dbError);
-      // Decide if this should be a fatal error for the API response or just logged
-      // For now, we'll log it and proceed to return the AI result
+      // For now, log it and proceed to return the AI result
     }
     
     return NextResponse.json(result, { status: 200 });

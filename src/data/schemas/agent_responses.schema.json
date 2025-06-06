@@ -1,0 +1,20 @@
+
+{
+  "case_id": "dispute_0093",
+  "timestamp": "2025-06-04T12:00:00Z",
+  "agent": "CovenantAgent",
+  "summary": "Recommended equitable land division",
+  "ethical_score": 0.2,
+  "cultural_alignment": "medium",
+  "verdicts": [
+    {
+      "path": "equal_share",
+      "reasoning": "Genesis 1:27 (equal dignity), Isaiah 1:17 (defend the oppressed)"
+    },
+    {
+      "path": "customary_inheritance",
+      "reasoning": "Cultural precedent; fairness offset proposed"
+    }
+  ],
+  "requires_override": false
+}

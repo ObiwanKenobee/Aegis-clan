@@ -1,0 +1,11 @@
+
+{
+  "rite_id": "rite_0098",
+  "member_id": "uid_004",
+  "type": "marriage",
+  "date": "2025-05-28",
+  "officiant": "uid_001",
+  "audio_archive": "gs://rituals/uid_004_marriage.mp3",
+  "notes": "Conducted at Kisii ridge under clan tree",
+  "blessing_scripture": "Genesis 2:24"
+}

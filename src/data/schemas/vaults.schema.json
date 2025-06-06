@@ -1,0 +1,28 @@
+
+{
+  "vault_id": "kisii_main_vault",
+  "clan_id": "kisii_nyangena_clan",
+  "balance": 42850,
+  "currency": "KES",
+  "rules": {
+    "max_withdrawal": 5000,
+    "discretionary_limit": 2000,
+    "auto_approval_for": ["funeral", "school_fees"]
+  },
+  "transactions": [
+    {
+      "timestamp": "2025-06-02T09:00:00Z",
+      "type": "deposit",
+      "amount": 1200,
+      "by": "uid_003"
+    },
+    {
+      "timestamp": "2025-06-03T16:00:00Z",
+      "type": "withdrawal",
+      "amount": 3000,
+      "for": "funeral",
+      "requested_by": "uid_002",
+      "approved_by": "VaultAgent"
+    }
+  ]
+}

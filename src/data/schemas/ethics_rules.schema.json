@@ -1,0 +1,20 @@
+
+{
+  "rule_id": "inheritance_rule_1",
+  "action": "land_inheritance",
+  "allow_override": true,
+  "priority": "elders_first",
+  "conditions": [
+    {
+      "condition": "firstborn_female",
+      "outcome": "entitled",
+      "reference": "Deuteronomy 21:17"
+    },
+    {
+      "condition": "absent_father",
+      "outcome": "shared_authority",
+      "reference": "Isaiah 1:17"
+    }
+  ],
+  "overrides_by": ["clan_elder", "FaithAgent"]
+}

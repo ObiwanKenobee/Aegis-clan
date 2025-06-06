@@ -1,0 +1,17 @@
+
+{
+  "clan_id": "kisii_nyangena_clan",
+  "name": "Nyangena Clan",
+  "region": "Kisii Town",
+  "elders": ["uid_001", "uid_003"],
+  "members": ["uid_001", "uid_002", "uid_003", "uid_004"],
+  "created_at": "2025-06-04T10:00:00Z",
+  "sacred_rules": ["inheritance_rule_1", "dispute_ethic_2"],
+  "diaspora_enabled": true,
+  "offline_access": true,
+  "covenant_status": "active",
+  "ethics_overrides": {
+    "approved": ["dispute_case_021"],
+    "pending": ["land_conflict_093"]
+  }
+}

@@ -1,0 +1,21 @@
+
+{
+  "uid_001": {
+    "role": "elder",
+    "canOverride": true,
+    "canDispute": true,
+    "accessVault": true
+  },
+  "uid_002": {
+    "role": "member",
+    "canOverride": false,
+    "canDispute": true,
+    "accessVault": false
+  },
+  "uid_004": {
+    "role": "diaspora",
+    "canViewOnly": true,
+    "canDispute": true,
+    "receiveUpdates": true
+  }
+}

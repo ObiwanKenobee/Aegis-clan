@@ -1,0 +1,37 @@
+
+{
+  "dispute_id": "land_conflict_093",
+  "clan_id": "kisii_nyangena_clan",
+  "status": "open",
+  "submitted_by": "uid_002",
+  "involved_parties": ["uid_002", "uid_004"],
+  "type": "inheritance",
+  "description": "Land division disagreement after elder's passing",
+  "testimonies": [
+    {
+      "by": "uid_002",
+      "text": "As firstborn daughter, I cared for the land..."
+    },
+    {
+      "by": "uid_004",
+      "text": "Traditionally, land goes to the male heir..."
+    }
+  ],
+  "agent_simulations": {
+    "CovenantAgent": {
+      "options": [
+        {
+          "verdict": "Split equally by land value, not size",
+          "scriptural_backing": "Deuteronomy 21:17",
+          "impact_score": 0.1
+        },
+        {
+          "verdict": "Follow patrilineal custom with dispute compensation",
+          "scriptural_backing": "Proverbs 13:22",
+          "impact_score": 0.3
+        }
+      ]
+    }
+  },
+  "resolved": false
+}

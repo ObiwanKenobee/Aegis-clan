@@ -1,0 +1,14 @@
+
+{
+  "uid": "uid_002",
+  "name": "Naomi Kemunto",
+  "birthdate": "1995-12-01",
+  "gender": "female",
+  "role": "firstborn_daughter",
+  "lineage": ["uid_001"],
+  "clan_id": "kisii_nyangena_clan",
+  "current_status": "alive",
+  "rites_completed": ["birth_naming", "confirmation"],
+  "vault_access": true,
+  "diaspora": false
+}

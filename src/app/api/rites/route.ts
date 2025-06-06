@@ -6,7 +6,6 @@ import { authAdmin, firestoreAdmin } from '@/lib/firebase/admin';
 import { logRite, LogRiteInputSchema, type LogRiteOutput } from '@/ai/flows/log-rite-flow';
 
 // Schema for creating a new rite, slightly adapted from LogRiteInputSchema for API needs
-// For example, clanId might be derived or enforced differently at API level.
 const CreateRiteApiSchema = LogRiteInputSchema.extend({
   clanId: z.string().min(1, "Clan ID is required to associate the rite.")
 });
@@ -37,18 +36,16 @@ export async function POST(request: NextRequest) {
     const requestBody = await request.json();
     const validatedApiInput = CreateRiteApiSchema.parse(requestBody);
     
-    // Call the Genkit flow to process rite data
     const flowResult = await logRite(validatedApiInput);
 
-    // Persist to Firestore 'rites' collection
-    const newRiteRef = firestoreAdmin.collection('rites').doc(); // Auto-generate ID
+    const newRiteRef = firestoreAdmin.collection('rites').doc();
     const serverTimestamp = firestoreAdmin.FieldValue.serverTimestamp();
 
     const riteDataToStore = {
-      ...flowResult.processedInput, // Contains original input + AI processed fields like isoDate
-      riteId: newRiteRef.id, // Store the Firestore-generated ID
-      userId: userId, // User who logged the rite
-      clanId: validatedApiInput.clanId, // Ensure clanId is stored
+      ...flowResult.processedInput,
+      riteId: newRiteRef.id,
+      userId: userId,
+      clanId: validatedApiInput.clanId,
       summaryFromAI: flowResult.summary,
       createdAt: serverTimestamp,
       updatedAt: serverTimestamp,
@@ -56,28 +53,37 @@ export async function POST(request: NextRequest) {
     
     await newRiteRef.set(riteDataToStore);
 
-    // After successfully logging the rite, attempt to update the member's rites_completed list
+    // --- Asynchronous Member Update (Conceptual) ---
+    // The following member update is critical for data integrity but can make the API response slower
+    // if the members collection is large or Firestore latency is high.
+    // Ideally, this secondary update should be handled asynchronously.
+    //
+    // How to make it truly asynchronous for better scalability and resilience:
+    // 1. Publish an event: After successfully storing the rite, publish an event to
+    //    Google Cloud Pub/Sub (e.g., topic: 'rite-created', message: { riteId: newRiteRef.id, memberId: riteDataToStore.memberId }).
+    // 2. Worker Service: A separate Cloud Function (or other worker service) would subscribe to this Pub/Sub topic.
+    // 3. Process Event: Upon receiving the event, this worker function would perform the member document update.
+    //    This decouples the member update from the initial API request/response lifecycle.
+    //    It also allows for retries and dead-lettering if the member update fails.
+    //
+    // For now, to make the API feel more responsive without full Pub/Sub implementation,
+    // we'll execute this as a fire-and-forget promise. This is NOT true asynchronous processing
+    // in a separate worker but makes the client not wait for this specific operation.
+    // The operation still consumes resources on the current API instance.
+
     if (riteDataToStore.memberId) {
-      try {
-        const memberQuery = await firestoreAdmin.collection('members').where('uid', '==', riteDataToStore.memberId).limit(1).get();
-        if (!memberQuery.empty) {
-          const memberDocRef = memberQuery.docs[0].ref;
-          await memberDocRef.update({
-            rites_completed: firestoreAdmin.FieldValue.arrayUnion(newRiteRef.id),
-            updatedAt: serverTimestamp, // Also update member's updatedAt timestamp
-          });
-          console.log(`Successfully updated member ${riteDataToStore.memberId} with rite ${newRiteRef.id}`);
-        } else {
-          console.warn(`Member document with uid ${riteDataToStore.memberId} not found. Could not update rites_completed.`);
-        }
-      } catch (memberUpdateError) {
-        console.error(`Error updating member ${riteDataToStore.memberId} rites_completed:`, memberUpdateError);
-        // Do not fail the main rite logging for this, but log the error.
-      }
+      updateMemberRitesCompleted(riteDataToStore.memberId, newRiteRef.id, serverTimestamp)
+        .then(() => {
+          console.log(`Member update initiated for member ${riteDataToStore.memberId} with rite ${newRiteRef.id}`);
+        })
+        .catch(error => {
+          console.error(`Error initiating member update for member ${riteDataToStore.memberId}:`, error);
+          // Log this error to your monitoring system. The main rite logging was successful.
+        });
     }
     
     return NextResponse.json({ 
-      message: "Rite logged successfully", 
+      message: "Rite logged successfully. Member update initiated.", 
       riteId: newRiteRef.id, 
       details: riteDataToStore 
     }, { status: 201 });
@@ -88,6 +94,27 @@ export async function POST(request: NextRequest) {
     }
     console.error('Error in POST /api/rites:', error);
     return NextResponse.json({ error: 'Internal Server Error while logging rite' }, { status: 500 });
+  }
+}
+
+// Helper function for the member update (could be in a separate service/module)
+async function updateMemberRitesCompleted(memberId: string, riteId: string, timestamp: FirebaseFirestore.FieldValue) {
+  try {
+    const memberQuery = await firestoreAdmin.collection('members').where('uid', '==', memberId).limit(1).get();
+    if (!memberQuery.empty) {
+      const memberDocRef = memberQuery.docs[0].ref;
+      await memberDocRef.update({
+        rites_completed: firestoreAdmin.FieldValue.arrayUnion(riteId),
+        updatedAt: timestamp,
+      });
+      console.log(`Successfully updated member ${memberId} with rite ${riteId}`);
+    } else {
+      console.warn(`Member document with uid ${memberId} not found. Could not update rites_completed.`);
+    }
+  } catch (memberUpdateError) {
+    console.error(`Error updating member ${memberId} rites_completed:`, memberUpdateError);
+    // In a real async system with Pub/Sub, this error would trigger retries or go to a dead-letter queue.
+    // Here, we just log it.
   }
 }
 
@@ -114,22 +141,18 @@ export async function GET(request: NextRequest) {
   const memberId = searchParams.get('memberId');
 
   try {
-    let query = firestoreAdmin.collection('rites').orderBy('createdAt', 'desc');
+    let query: FirebaseFirestore.Query = firestoreAdmin.collection('rites');
+    
+    // Firestore queries require ordering before applying inequality filters on different fields.
+    // For simplicity, we'll add a default order, but complex filtering might need more specific indexing and ordering.
+    query = query.orderBy('createdAt', 'desc');
 
-    // Example: Allow fetching rites based on clanId or memberId if provided
-    // For more complex role-based access (e.g. elder sees all clan rites), custom claims would be checked
     if (clanId) {
       // TODO: Implement logic to verify user has permission to view rites for this clanId
-      // e.g., by checking if userId is a member or elder of clanId
       query = query.where('clanId', '==', clanId);
     } else if (memberId) {
-       // Users can generally see rites associated with their own memberId (if they are that member)
-       // or if they are an elder of the clan the member belongs to.
-       // For simplicity, let's assume for now user can query for any memberId if they are authenticated.
-       // Proper security rules in Firestore are critical here.
       query = query.where('memberId', '==', memberId);
     } else {
-      // Default to fetching rites logged by the current user if no other params
       query = query.where('userId', '==', userId);
     }
     
@@ -146,3 +169,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Internal Server Error while fetching rites' }, { status: 500 });
   }
 }
+

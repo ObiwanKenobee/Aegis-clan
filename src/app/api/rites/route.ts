@@ -55,6 +55,26 @@ export async function POST(request: NextRequest) {
     };
     
     await newRiteRef.set(riteDataToStore);
+
+    // After successfully logging the rite, attempt to update the member's rites_completed list
+    if (riteDataToStore.memberId) {
+      try {
+        const memberQuery = await firestoreAdmin.collection('members').where('uid', '==', riteDataToStore.memberId).limit(1).get();
+        if (!memberQuery.empty) {
+          const memberDocRef = memberQuery.docs[0].ref;
+          await memberDocRef.update({
+            rites_completed: firestoreAdmin.FieldValue.arrayUnion(newRiteRef.id),
+            updatedAt: serverTimestamp, // Also update member's updatedAt timestamp
+          });
+          console.log(`Successfully updated member ${riteDataToStore.memberId} with rite ${newRiteRef.id}`);
+        } else {
+          console.warn(`Member document with uid ${riteDataToStore.memberId} not found. Could not update rites_completed.`);
+        }
+      } catch (memberUpdateError) {
+        console.error(`Error updating member ${riteDataToStore.memberId} rites_completed:`, memberUpdateError);
+        // Do not fail the main rite logging for this, but log the error.
+      }
+    }
     
     return NextResponse.json({ 
       message: "Rite logged successfully", 
@@ -94,7 +114,7 @@ export async function GET(request: NextRequest) {
   const memberId = searchParams.get('memberId');
 
   try {
-    let query = firestoreAdmin.collection('rites');
+    let query = firestoreAdmin.collection('rites').orderBy('createdAt', 'desc');
 
     // Example: Allow fetching rites based on clanId or memberId if provided
     // For more complex role-based access (e.g. elder sees all clan rites), custom claims would be checked
@@ -113,7 +133,7 @@ export async function GET(request: NextRequest) {
       query = query.where('userId', '==', userId);
     }
     
-    const snapshot = await query.orderBy('createdAt', 'desc').get();
+    const snapshot = await query.get();
     if (snapshot.empty) {
       return NextResponse.json([], { status: 200 });
     }

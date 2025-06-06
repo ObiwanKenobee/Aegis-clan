@@ -8,15 +8,16 @@ import { ZodError } from 'zod';
 import { authAdmin, firestoreAdmin } from '@/lib/firebase/admin';
 
 // Placeholder URL for where your Genkit flow would be deployed as a microservice
-// e.g., a Google Cloud Function URL.
-const FAMILY_TREE_MICROSERVICE_URL = process.env.FAMILY_TREE_MICROSERVICE_URL || 'http://localhost:3400/flows/buildFamilyTreeFlow'; // Genkit default local flow server URL for example
+// e.g., a Google Cloud Function URL. For local testing with `genkit start`,
+// flows are often available at http://localhost:3400/flows/<flowName>
+const FAMILY_TREE_MICROSERVICE_URL = process.env.FAMILY_TREE_MICROSERVICE_URL || 'http://localhost:3400/flows/buildFamilyTreeFlow';
 
 export async function POST(request: NextRequest) {
-  const authorization = request.headers.get('Authorization');
-  if (!authorization?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Unauthorized: Missing or invalid token format.' }, { status: 401 });
+  const authorizationHeader = request.headers.get('Authorization');
+  if (!authorizationHeader?.startsWith('Bearer ')) {
+    return NextResponse.json({ error: 'Unauthorized: Missing or invalid user token format.' }, { status: 401 });
   }
-  const idToken = authorization.split('Bearer ')[1];
+  const idToken = authorizationHeader.split('Bearer ')[1];
 
   let userId: string;
   let decodedToken;
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
     decodedToken = await authAdmin.verifyIdToken(idToken);
     userId = decodedToken.uid;
     
-    // Example of checking for a custom claim.
+    // Example of checking for a custom claim for user authorization.
     // Ensure your test user has this claim or comment this block for initial testing.
     // if (!decodedToken.canManageFamilyTree) {
     //   console.warn(`User ${userId} attempted to manage family tree without 'canManageFamilyTree' claim.`);
@@ -32,37 +33,64 @@ export async function POST(request: NextRequest) {
     // }
 
   } catch (error) {
-    console.error('Error verifying ID token or checking claims:', error);
-    return NextResponse.json({ error: 'Unauthorized: Invalid token or claim issue.' }, { status: 401 });
+    console.error('Error verifying user ID token or checking claims:', error);
+    return NextResponse.json({ error: 'Unauthorized: Invalid user token or claim issue.' }, { status: 401 });
   }
 
   try {
     const requestBody = await request.json();
     const validatedInput = BuildFamilyTreeInputSchema.parse(requestBody);
     
-    // Instead of calling the flow directly:
-    // const result: BuildFamilyTreeOutput = await buildFamilyTree(validatedInput);
-    // We now call it as an external microservice via HTTP
+    // --- Microservice Call ---
+    // When this Next.js backend runs on Google Cloud (e.g., App Hosting, Cloud Run),
+    // it uses an underlying service account. To call another Google Cloud service
+    // (like a Genkit flow deployed as a Cloud Function) securely, you'd:
+    // 1. Grant the Next.js service account IAM permission to invoke the target Cloud Function.
+    // 2. Configure the target Cloud Function to require authentication.
+    // 3. The Next.js backend would then fetch an OIDC Identity Token for its service account,
+    //    scoped to the target Cloud Function's URL. This token is sent in the Authorization header.
     
+    // Conceptual: How to get an Identity Token (actual implementation depends on environment)
+    // let serviceIdentityToken;
+    // if (process.env.GOOGLE_CLOUD_PROJECT) { // Indicates running on GCP
+    //   // On GCP, you'd typically use the google-auth-library or metadata server
+    //   // to get an identity token for the service account.
+    //   // const {GoogleAuth} = require('google-auth-library');
+    //   // const auth = new GoogleAuth();
+    //   // const client = await auth.getIdTokenClient(FAMILY_TREE_MICROSERVICE_URL);
+    //   // const idTokenResponse = await client.getRequestHeaders();
+    //   // serviceIdentityToken = idTokenResponse.Authorization.split('Bearer ')[1];
+    //   serviceIdentityToken = "CONCEPTUAL_GOOGLE_ID_TOKEN_FOR_SERVICE_ACCOUNT"; // Placeholder
+    // }
+
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+
+    // if (serviceIdentityToken) {
+    //   headers['Authorization'] = `Bearer ${serviceIdentityToken}`;
+    //   console.log('Calling family tree microservice with service identity token.');
+    // } else {
+    //   console.log(`Calling family tree microservice at: ${FAMILY_TREE_MICROSERVICE_URL} (unauthenticated or local)`);
+    // }
     console.log(`Calling family tree microservice at: ${FAMILY_TREE_MICROSERVICE_URL}`);
+
+
     const microserviceResponse = await fetch(FAMILY_TREE_MICROSERVICE_URL, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            // If the microservice itself is protected by Firebase Auth (e.g., Cloud Function with auth),
-            // you might pass the ID token or use a service account for server-to-server auth.
-            // 'Authorization': `Bearer ${idToken}`, // Example: Forwarding user token
-        },
-        body: JSON.stringify({ data: validatedInput }), // Genkit flow server expects {data: input}
+        headers: headers,
+        body: JSON.stringify({ data: validatedInput }), // Genkit flow server expects {data: {input}}
     });
 
     if (!microserviceResponse.ok) {
         const errorBody = await microserviceResponse.text();
         console.error('Error from family tree microservice:', microserviceResponse.status, errorBody);
+        // If the error is 401 or 403, it might be due to the microservice expecting
+        // an Identity Token and not receiving a valid one, or the service account lacking permission.
         throw new Error(`Family tree microservice failed with status ${microserviceResponse.status}: ${errorBody}`);
     }
 
-    // Genkit flow server wraps output in {result: output}
+    // Genkit flow server typically wraps output in {result: output}
     const responseData = await microserviceResponse.json();
     const result: BuildFamilyTreeOutput = responseData.result;
 
@@ -100,4 +128,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
-

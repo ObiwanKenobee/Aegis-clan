@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -6,6 +7,12 @@
  * - buildFamilyTree - A function that handles the family tree construction process.
  * - BuildFamilyTreeInput - The input type for the buildFamilyTree function.
  * - BuildFamilyTreeOutput - The return type for the buildFamilyTree function.
+ *
+ * When this flow is deployed as a Google Cloud Function microservice,
+ * it should be configured with IAM settings to require authentication.
+ * It expects to be invoked by an authenticated service identity (e.g.,
+ * the service account of the Next.js BFF or another authorized service)
+ * which provides a Google-signed OIDC Identity Token in the Authorization header.
  */
 
 import {ai} from '@/ai/genkit';

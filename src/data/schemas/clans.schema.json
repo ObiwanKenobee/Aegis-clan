@@ -5,6 +5,8 @@
   "region": "Kisii Town",
   "elders": ["uid_001", "uid_003"],
   "members": ["uid_001", "uid_002", "uid_003", "uid_004"],
+  "primaryLanguageCode": "guz",
+  "languageNotes": "Ekegusii, with regional variations. Storytelling traditions are strong.",
   "created_at": "2025-06-04T10:00:00Z",
   "sacred_rules": ["inheritance_rule_1", "dispute_ethic_2"],
   "diaspora_enabled": true,

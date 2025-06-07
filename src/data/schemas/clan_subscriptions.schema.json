@@ -1,0 +1,28 @@
+
+{
+  "subscriptionId": "sub_clan_premium_nyangena",
+  "clanId": "kisii_nyangena_clan",
+  "tier": "Clan Premium",
+  "status": "active",
+  "startDate": "2024-01-01T00:00:00Z",
+  "endDate": "2025-01-01T00:00:00Z",
+  "billingCycle": "monthly",
+  "pricePerCycle": 29,
+  "currency": "USD",
+  "features": [
+    "advanced_ancestry_tools",
+    "priority_dispute_mediation",
+    "extended_vault_analytics",
+    "diaspora_premium_comms"
+  ],
+  "usage": {
+    "membersActive": 150,
+    "storageUsedMB": 500,
+    "agentInteractionsMonth": 1200
+  },
+  "paymentMethodId": "pm_xxxxxxxxxxxxx",
+  "lastPaymentDate": "2024-07-01T00:00:00Z",
+  "nextBillingDate": "2024-08-01T00:00:00Z",
+  "autoRenew": true,
+  "missionContributionPercentage": 0.05
+}

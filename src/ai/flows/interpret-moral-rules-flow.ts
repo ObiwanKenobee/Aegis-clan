@@ -16,13 +16,12 @@ export const InterpretMoralRulesInputSchema = z.object({
   moralRulesJson: z.string().describe('The clan\'s moral rules in JSON format (based on ethics_rules.schema.json).').refine((val) => {
     try {
       JSON.parse(val); // Check if it's valid JSON
-      // Optionally, add more validation against a Zod schema for ethics_rules.schema.json if needed
       return true;
     } catch (e) {
       return false;
     }
   }, { message: "Moral rules must be valid JSON." }),
-  clanContext: z.string().optional().describe('Optional additional context about the clan or specific traditions relevant to the situation.'),
+  clanContext: z.string().optional().describe('Optional additional context about the clan, its region, governance style, or specific traditions relevant to the situation.'),
 });
 export type InterpretMoralRulesInput = z.infer<typeof InterpretMoralRulesInputSchema>;
 
@@ -37,7 +36,8 @@ export const InterpretMoralRulesOutputSchema = z.object({
   overallAssessment: z.string().describe('A general assessment of the situation in light of the moral rules (e.g., "Compliant", "Minor Conflict", "Significant Conflict").'),
   conflicts: z.array(ConflictDetailSchema).describe('A list of identified conflicts between the situation and the moral rules. Empty if no conflicts.'),
   recommendation: z.string().describe('A summary recommendation or next steps for the elders or parties involved.'),
-  pertinentScripturalReferences: z.array(z.string()).optional().describe('Any scriptural references cited by the rules that are particularly pertinent to the identified conflicts or assessment.')
+  pertinentScripturalReferences: z.array(z.string()).optional().describe('Any scriptural references cited by the rules that are particularly pertinent to the identified conflicts or assessment.'),
+  confidenceScore: z.number().min(0).max(1).describe('The AI\'s confidence in its interpretation, from 0.0 (low) to 1.0 (high).'),
 });
 export type InterpretMoralRulesOutput = z.infer<typeof InterpretMoralRulesOutputSchema>;
 
@@ -62,8 +62,9 @@ Clan's Moral Rules (JSON):
 \`\`\`
 
 {{#if clanContext}}
-Additional Clan Context:
+Additional Clan Context (may include region, governance style, specific traditions):
 {{{clanContext}}}
+Consider this context, including any mentioned regional customs or governance styles (e.g., Elder Council, Consensus-based), when formulating your interpretation and recommendation.
 {{/if}}
 
 Your tasks are:
@@ -73,6 +74,7 @@ Your tasks are:
 4.  Provide an 'overallAssessment' of the situation (e.g., "Compliant", "Minor Conflict requiring clarification", "Significant Conflict requiring elder review").
 5.  Formulate a concise 'recommendation' for the clan elders or involved parties.
 6.  If specific scriptural references are cited in the rules that become relevant to identified conflicts, list them under 'pertinentScripturalReferences'.
+7.  Provide a 'confidenceScore' (a number between 0.0 and 1.0) representing your confidence in this overall interpretation and recommendation.
 
 Ensure your output strictly adheres to the requested JSON schema for InterpretMoralRulesOutput.
 If no conflicts are found, the 'conflicts' array MUST be an empty array [], and the assessment should reflect compliance.
@@ -90,10 +92,12 @@ const interpretMoralRulesFlow = ai.defineFlow(
     if (!output) {
       throw new Error("CovenantAgent failed to produce an interpretation.");
     }
-    // Ensure the output conforms, especially the conflicts array.
+    // Ensure the output conforms, especially the conflicts array and confidence score.
     return {
         ...output,
         conflicts: output.conflicts || [], // Ensure conflicts is an array, even if empty
+        confidenceScore: output.confidenceScore !== undefined && output.confidenceScore !== null ? output.confidenceScore : 0.5, // Default confidence if not provided
     };
   }
 );
+

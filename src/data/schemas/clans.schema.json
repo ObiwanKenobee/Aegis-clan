@@ -15,5 +15,11 @@
   "ethics_overrides": {
     "approved": ["dispute_case_021"],
     "pending": ["land_conflict_093"]
-  }
+  },
+  "cultural_profile": {
+    "region_category": "East Africa",
+    "governance_style": "ElderCouncil"
+  },
+  "federation_id": "federation_xyz_789"
 }
+

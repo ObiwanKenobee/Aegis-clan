@@ -21,6 +21,13 @@ export async function POST(request: NextRequest) {
     // if (!decodedToken.canRequestInterpretation) { 
     //   return NextResponse.json({ error: 'Forbidden: Insufficient permissions.' }, { status: 403 });
     // }
+    // Further granular role checks based on your new platform vision:
+    // if (decodedToken.role === 'TechSteward' || decodedToken.role === 'CivicPartner') {
+    //    console.log(`Interpretation requested by ${decodedToken.role}: ${userId}`);
+    // } else if (decodedToken.role !== 'Elder' && !decodedToken.canRequestInterpretation) { // Example
+    //    return NextResponse.json({ error: 'Forbidden: Insufficient role for interpretation.' }, { status: 403 });
+    // }
+
   } catch (error) {
     console.error('Error verifying ID token:', error);
     return NextResponse.json({ error: 'Unauthorized: Invalid token.' }, { status: 401 });
@@ -30,12 +37,15 @@ export async function POST(request: NextRequest) {
     const requestBody = await request.json();
     const validatedInput = InterpretMoralRulesInputSchema.parse(requestBody);
     
+    // Future enhancement: If clanId is available (e.g., from custom claims or request body),
+    // you could fetch clan's region/governanceStyle from Firestore and enrich `validatedInput.clanContext`
+    // or pass them as separate parameters to the flow if the flow's input schema is adapted.
+
     const result: InterpretMoralRulesOutput = await interpretMoralRules(validatedInput);
 
     // Persist to Firestore 'agent_logs' collection
     try {
       const logEntryRef = firestoreAdmin.collection('agent_logs').doc();
-      // Simple hash for moral rules for logging, or consider storing a version/ID if rules are versioned
       const moralRulesHash = validatedInput.moralRulesJson.length + validatedInput.moralRulesJson.substring(0,20);
 
       await logEntryRef.set({
@@ -51,14 +61,14 @@ export async function POST(request: NextRequest) {
           moralRulesHash: moralRulesHash,
           clanContext: validatedInput.clanContext,
         },
-        result: result, // Store the full agent output, which matches InterpretMoralRulesOutputSchema
+        result: result, 
         ethics_reference: result.pertinentScripturalReferences && result.pertinentScripturalReferences.length > 0 
                           ? result.pertinentScripturalReferences.join(', ') 
                           : null,
+        confidence_score: result.confidenceScore,
       });
     } catch (dbError) {
       console.error('Error saving moral interpretation log to Firestore agent_logs:', dbError);
-      // Log error but proceed to return AI result
     }
     
     return NextResponse.json(result, { status: 200 });
@@ -73,3 +83,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
+

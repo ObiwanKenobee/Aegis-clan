@@ -20,7 +20,7 @@ A modular backend that powers **ClanChain** — a covenant-driven platform for c
 ## 🛠️ Setup
 
 ```bash
-git clone https://github.com/your-org/clanchain-backend.git
+git clone https://github.com/ObiwanKenobee/clanchain-backend.git
 cd clanchain-backend
 pip install -r requirements.txt
 ```

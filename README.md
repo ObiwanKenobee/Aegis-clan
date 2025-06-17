@@ -1,9 +1,5 @@
 Backend: 
 
-You're welcome! Here's a **concise backend `README.md`** for the **ClanChain** project:
-
----
-
 # 🧠 ClanChain Backend
 
 A modular backend that powers **ClanChain** — a covenant-driven platform for clan governance, AI ethics, disputes, rituals, and intergenerational trust.
